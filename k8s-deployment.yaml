@@ -1,0 +1,140 @@
+---
+# Secret holding the API basic-auth credentials
+apiVersion: v1
+kind: Secret
+metadata:
+  name: sealed-secret-api-auth
+  namespace: kube-system
+type: Opaque
+stringData:
+  AUTH_USER: "admin"
+  AUTH_PASS: "changeme"   # ← change this!
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sealed-secret-api
+  namespace: kube-system
+  labels:
+    app: sealed-secret-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sealed-secret-api
+  template:
+    metadata:
+      labels:
+        app: sealed-secret-api
+    spec:
+      imagePullSecrets:
+        - name: private-registry-secret
+      containers:
+        - name: sealed-secrets-api
+          image: YOUR_PRIVATE_REGISTRY/sealed-secrets-api:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: PORT
+              value: "8080"
+            - name: CERT_FILE
+              value: "/certs/sealed-secrets.pem"
+            - name: CONTROLLER_NAMESPACE
+              value: "kube-system"
+            - name: CONTROLLER_NAME
+              value: "sealed-secrets-controller"
+            - name: AUTH_USER
+              valueFrom:
+                secretKeyRef:
+                  name: sealed-secret-api-auth
+                  key: AUTH_USER
+            - name: AUTH_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: sealed-secret-api-auth
+                  key: AUTH_PASS
+          volumeMounts:
+            - name: sealed-secret-cert
+              mountPath: /certs
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 65534
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+            limits:
+              cpu: "200m"
+              memory: "64Mi"
+      volumes:
+        - name: sealed-secret-cert
+          # Fetch the cert from the sealed-secrets controller's own Secret/TLS secret,
+          # or mount from a ConfigMap you populate with kubeseal --fetch-cert output.
+          # Option A – use the controller's TLS secret directly:
+          secret:
+            secretName: sealed-secrets-key   # name varies; check your cluster
+            items:
+              - key: tls.crt
+                path: sealed-secrets.pem
+          # Option B – use a ConfigMap you create from the fetched PEM:
+          # configMap:
+          #   name: sealed-secrets-cert
+          #   items:
+          #     - key: cert.pem
+          #       path: sealed-secrets.pem
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sealed-secret-api
+  namespace: kube-system
+spec:
+  selector:
+    app: sealed-secret-api
+  ports:
+    - port: 8080
+      targetPort: 8080
+# ---
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: sealed-secret-api
+#   namespace: kube-system
+#   annotations:
+#     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+#     traefik.ingress.kubernetes.io/router.tls: "true"
+#     traefik.ingress.kubernetes.io/router.middlewares: "traefik-traefik-redirect-to-https@kubernetescrd"
+# spec:
+#   ingressClassName: traefik
+#   tls:
+#     - hosts:
+#         - sealed-secret-api.yourdomain.com
+#       secretName: yourdomain-com-tls
+#   rules:
+#     - host: sealed-secret-api.yourdomain.com
+#       http:
+#         paths:
+#           - path: /
+#             pathType: Prefix
+#             backend:
+#               service:
+#                 name: sealed-secret-api
+#                 port:
+#                   number: 8080
