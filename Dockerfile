@@ -3,16 +3,16 @@ FROM docker.arvancloud.ir/alpine:3.20 AS kubeseal-downloader
 
 ARG KUBESEAL_VERSION=0.36.6
 # remove this line if you want to download from GitHub releases
-COPY ./sealed-secret-files/kubeseal-0.36.6-linux-amd64.tar.gz /tmp/kubeseal.tar.gz 
+# COPY ./sealed-secret-files/kubeseal-0.36.6-linux-amd64.tar.gz /tmp/kubeseal.tar.gz 
 
 RUN ALPINE_VERSION=$(cat /etc/alpine-release | cut -d'.' -f1-2) && \
     echo "https://mirror.arvancloud.ir/alpine/v${ALPINE_VERSION}/main" > /etc/apk/repositories && \
     echo "https://mirror.arvancloud.ir/alpine/v${ALPINE_VERSION}/community" >> /etc/apk/repositories \
     apk update
 RUN apk add --no-cache curl tar && \
-    # curl -fsSL \
-    #   "https://github.com/bitnami-labs/sealed-secrets/releases/download/v${KUBESEAL_VERSION}/kubeseal-${KUBESEAL_VERSION}-linux-arm64.tar.gz" \
-    #   -o /tmp/kubeseal.tar.gz && \
+    curl -fsSL \
+      "https://github.com/bitnami-labs/sealed-secrets/releases/download/v${KUBESEAL_VERSION}/kubeseal-${KUBESEAL_VERSION}-linux-arm64.tar.gz" \
+      -o /tmp/kubeseal.tar.gz && \
     tar -xzf /tmp/kubeseal.tar.gz -C /usr/local/bin kubeseal && \
     chmod +x /usr/local/bin/kubeseal && \
     kubeseal --version
