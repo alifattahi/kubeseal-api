@@ -1,14 +1,14 @@
 # ── Stage 1: Download kubeseal ────────────────────────────────────────────────
-FROM docker.arvancloud.ir/alpine:3.20 AS kubeseal-downloader
+FROM alpine:3.20 AS kubeseal-downloader
 
 ARG KUBESEAL_VERSION=0.36.6
 # remove this line if you want to download from GitHub releases
 # COPY ./sealed-secret-files/kubeseal-0.36.6-linux-amd64.tar.gz /tmp/kubeseal.tar.gz 
 
-RUN ALPINE_VERSION=$(cat /etc/alpine-release | cut -d'.' -f1-2) && \
-    echo "https://mirror.arvancloud.ir/alpine/v${ALPINE_VERSION}/main" > /etc/apk/repositories && \
-    echo "https://mirror.arvancloud.ir/alpine/v${ALPINE_VERSION}/community" >> /etc/apk/repositories \
-    apk update
+# RUN ALPINE_VERSION=$(cat /etc/alpine-release | cut -d'.' -f1-2) && \
+#     echo "https://mirror.arvancloud.ir/alpine/v${ALPINE_VERSION}/main" > /etc/apk/repositories && \
+#     echo "https://mirror.arvancloud.ir/alpine/v${ALPINE_VERSION}/community" >> /etc/apk/repositories \
+#     apk update
 RUN apk add --no-cache curl tar && \
     curl -fsSL \
       "https://github.com/bitnami-labs/sealed-secrets/releases/download/v${KUBESEAL_VERSION}/kubeseal-${KUBESEAL_VERSION}-linux-arm64.tar.gz" \
@@ -18,7 +18,7 @@ RUN apk add --no-cache curl tar && \
     kubeseal --version
 
 # ── Stage 2: Build Go binary ──────────────────────────────────────────────────
-FROM docker.arvancloud.ir/golang:1.26-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
 WORKDIR /src
 COPY go.mod ./
@@ -30,11 +30,11 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /sealed-secret-api .
 
 # ── Stage 3: Minimal runtime ──────────────────────────────────────────────────
-FROM docker.arvancloud.ir/alpine:3.20
-RUN ALPINE_VERSION=$(cat /etc/alpine-release | cut -d'.' -f1-2) && \
-    echo "https://mirror.arvancloud.ir/alpine/v${ALPINE_VERSION}/main" > /etc/apk/repositories && \
-    echo "https://mirror.arvancloud.ir/alpine/v${ALPINE_VERSION}/community" >> /etc/apk/repositories \
-    apk update
+FROM alpine:3.20
+# RUN ALPINE_VERSION=$(cat /etc/alpine-release | cut -d'.' -f1-2) && \
+#     echo "https://mirror.arvancloud.ir/alpine/v${ALPINE_VERSION}/main" > /etc/apk/repositories && \
+#     echo "https://mirror.arvancloud.ir/alpine/v${ALPINE_VERSION}/community" >> /etc/apk/repositories \
+#     apk update
 
 RUN apk add --no-cache ca-certificates && \
     addgroup -S appgroup && adduser -S appuser -G appgroup
